@@ -1,26 +1,59 @@
-node('docker') {
-  def services = ['api', 'worker', 'admin']
+pipeline {
+  agent { 
+    docker { image 'node:20-alpine' } 
+  }
 
-  stage('Checkout') { checkout scm }
+  environment {
+    NODE_ENV = 'test'
+  }
 
-  // Boucle dynamique — impossible en déclaratif sans matrix
-  def parallelStages = [:]
-  services.each { svc ->
-    parallelStages[svc] = {
-      stage("Test ${svc}") {
-        dir(svc) {
-          sh 'npm ci && npm test'
+  triggers {
+    pollSCM('H/5 * * * *')
+  }
+
+  stages {
+    stage('Install') { 
+      steps { 
+        sh 'npm ci' 
+      } 
+    }
+    
+    stage('Lint') { 
+      steps { 
+        sh 'npm run lint' 
+      } 
+    }
+    
+    stage('Test') {
+      steps {
+        sh 'npm test -- --coverage'
+      }
+      post {
+        always {
+          junit 'reports/junit.xml'
+          archiveArtifacts artifacts: 'coverage/**'
         }
       }
     }
+    
+    stage('Deploy') {
+      when { 
+        branch 'main' 
+      }
+      steps { 
+        sh './deploy.sh' 
+      }
+    }
   }
-  parallel parallelStages
 
-  // Logique conditionnelle riche
-  if (env.BRANCH_NAME == 'main' && currentBuild.changeSets.size() > 0) {
-    stage('Release') {
-      def version = sh(returnStdout: true, script: 'git describe --tags').trim()
-      sh "./release.sh ${version}"
+  post {
+    success { 
+      echo '✅ Pipeline OK' 
+    }
+    failure { 
+      mail to: 'team@x.io', 
+           subject: "❌ Echec: ${env.JOB_NAME}", 
+           body: "Le build ${env.BUILD_NUMBER} a échoué.\n\nVoir les logs : ${env.BUILD_URL}"
     }
   }
 }
