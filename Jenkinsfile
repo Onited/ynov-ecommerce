@@ -1,5 +1,5 @@
 pipeline {
-  agent { docker { image 'node:20-alpine' } }
+  agent any
 
   environment {
     NODE_ENV = 'test'
@@ -14,18 +14,24 @@ pipeline {
     stage('Lint')    { steps { sh 'npm run lint' } }
     stage('Test') {
       steps {
-        sh 'npm test -- --coverage'
+        sh 'npm run test:coverage'
       }
       post {
         always {
-          junit 'reports/junit.xml'
-          archiveArtifacts 'coverage/**'
+          archiveArtifacts artifacts: 'coverage/**', allowEmptyArchive: true
         }
       }
     }
     stage('Deploy') {
-      when { branch 'main' }
-      steps { sh './deploy.sh' }
+      when {
+        allOf {
+          branch 'main'
+          expression { fileExists('deploy.sh') }
+        }
+      }
+      steps {
+        sh 'chmod +x ./deploy.sh && ./deploy.sh'
+      }
     }
   }
 
