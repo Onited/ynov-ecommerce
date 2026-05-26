@@ -1,5 +1,6 @@
 pipeline {
   agent any
+  tools { nodejs 'node-20' }
 
   environment {
     NODE_ENV = 'test'
@@ -10,7 +11,12 @@ pipeline {
   }
 
   stages {
-    stage('Install') { steps { sh 'npm ci' } }
+    stage('Install') {
+      steps {
+        sh 'node -v && npm -v'
+        sh 'npm ci'
+      }
+    }
     stage('Lint')    { steps { sh 'npm run lint' } }
     stage('Test') {
       steps {
